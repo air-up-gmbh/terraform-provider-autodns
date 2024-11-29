@@ -16,7 +16,7 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 // testAccPreCheck runs pre-checks before the tests run.
 func testAccPreCheck(t *testing.T) {
 	if os.Getenv("AUTODNS_USERNAME") == "" || os.Getenv("AUTODNS_PASSWORD") == "" {
-		t.Fatalf("Please make sure that AUTODNS_USERNAME andAUTODNS_PASSWORD environment variables are set.")
+		t.Fatalf("Please make sure that AUTODNS_USERNAME and AUTODNS_PASSWORD environment variables are set.")
 	}
 
 	if os.Getenv("TF_AUTODNS_ZONE_ORIGIN") == "" {
