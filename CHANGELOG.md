@@ -1,3 +1,7 @@
+## 0.1.2 (PoC release)
+
+Fixed an issue where the validation fails when the `values` property in `record_resource` is still unknown.
+
 ## 0.1.1 (PoC release)
 
 Small wording fix.

@@ -14,6 +14,25 @@ import (
 
 var zoneID = os.Getenv("TF_AUTODNS_ZONE_ID")
 
+var testDataApexRecord = `
+resource "autodns_record" "test" {
+	zone_id = "` + zoneID + `"
+  name  = ""
+  ttl   = 60
+  type  = "A"
+  values = ["2.2.2.2"]
+}
+`
+var testDataApexRecordUpdated = `
+resource "autodns_record" "test" {
+	zone_id = "` + zoneID + `"
+  name  = ""
+  ttl   = 90
+  type  = "A"
+  values = ["4.4.4.4"]
+}
+`
+
 var testDataARecord = `
 resource "autodns_record" "test" {
 	zone_id = "` + zoneID + `"
@@ -85,6 +104,67 @@ resource "autodns_record" "test" {
 }
 `
 
+func TestAccRecordResourceApexRecord(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			// Create and Read testing
+			{
+				Config: testDataApexRecord,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("id"), knownvalue.StringExact(zoneID+"____A")),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("")),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(60)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("A")),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(1)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+						knownvalue.StringExact("2.2.2.2"),
+					})),
+				},
+			},
+			// There should be no changes if we try with the same data
+			{
+				Config: testDataApexRecord,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// ImportState testing
+			{
+				ResourceName:      "autodns_record.test",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			// Update and Read testing
+			{
+				Config: testDataApexRecordUpdated,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("id"), knownvalue.StringExact(zoneID+"____A")),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("")),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(90)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("A")),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(1)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+						knownvalue.StringExact("4.4.4.4"),
+					})),
+				},
+			},
+			// There should be no changes if we try with the same data
+			{
+				Config: testDataApexRecordUpdated,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			// Delete testing automatically occurs in TestCase
+		},
+	})
+}
 func TestAccRecordResourceARecord(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },

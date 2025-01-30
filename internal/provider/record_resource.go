@@ -299,6 +299,11 @@ func (r *RecordResource) ValidateConfig(ctx context.Context, req resource.Valida
 		return
 	}
 
+	// Skip when Values is still unknown to terraform
+	if config.Values.IsUnknown() {
+		return
+	}
+
 	// Turn the values into a slice of []types.String
 	recordValues := make([]types.String, 0, len(config.Values.Elements()))
 	resp.Diagnostics.Append(config.Values.ElementsAs(ctx, &recordValues, false)...)
