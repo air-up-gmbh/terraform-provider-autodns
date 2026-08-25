@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -67,9 +68,20 @@ func (c *Client) GetRecords(ctx context.Context, zoneID string) ([]Record, error
 
 	// Serve from the per-zone cache when we already fetched this zone. The
 	// API has no per-record read, so without this every record resource
-	// re-downloads the whole zone.
+	// re-downloads the whole zone. Callers filter the result in place with
+	// slices.DeleteFunc, so hand out a copy and never the cached slice.
 	if records, ok := c.cachedRecords(zoneID); ok {
-		return records, nil
+		return slices.Clone(records), nil
+	}
+
+	// Only one fetch per zone: parallel readers that all miss the cache queue
+	// here, and every one after the winner finds the zone already cached.
+	fetch := c.fetchLock(zoneID)
+	fetch.Lock()
+	defer fetch.Unlock()
+
+	if records, ok := c.cachedRecords(zoneID); ok {
+		return slices.Clone(records), nil
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/zone/%s/%s", c.HostURL, zoneInfo[0], zoneInfo[1]), nil)
@@ -88,7 +100,7 @@ func (c *Client) GetRecords(ctx context.Context, zoneID string) ([]Record, error
 
 	c.cacheRecords(zoneID, res[0].Records)
 
-	return res[0].Records, nil
+	return slices.Clone(res[0].Records), nil
 }
 
 // UpdateRecords sends an API request to update the records in the JSON payload.

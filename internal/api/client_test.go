@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -159,11 +160,13 @@ func TestGetRecordsErrorIsNotCached(t *testing.T) {
 	}
 }
 
-func TestConcurrentReadsAreSafe(t *testing.T) {
+func TestConcurrentColdReadsFetchOnce(t *testing.T) {
 	c, calls := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, zoneBody())
 	})
 
+	// 20 resources hit an empty cache at once, as Terraform does at the start
+	// of a refresh. They must collapse into a single fetch.
 	var wg sync.WaitGroup
 	for range 20 {
 		wg.Add(1)
@@ -171,17 +174,65 @@ func TestConcurrentReadsAreSafe(t *testing.T) {
 		go func() {
 			defer wg.Done()
 
-			if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+			records, err := c.GetRecords(context.Background(), testZoneID)
+			if err != nil {
 				t.Errorf("concurrent read: %s", err)
+
+				return
+			}
+
+			if len(records) != 1 {
+				t.Errorf("expected 1 record, got %d", len(records))
 			}
 		}()
 	}
 
 	wg.Wait()
 
-	// Racing readers may each miss before the first store lands; the cache
-	// must still bound the calls well below 20 and never corrupt the map.
-	if got := atomic.LoadInt64(calls); got > 20 {
-		t.Errorf("unexpected call count: %d", got)
+	if got := atomic.LoadInt64(calls); got != 1 {
+		t.Errorf("expected 1 HTTP call for 20 concurrent cold reads, got %d", got)
+	}
+}
+
+// TestCallersCannotCorruptTheCache guards a real regression: callers filter the
+// returned slice in place with slices.DeleteFunc, so handing out the cached
+// slice lets the first resource destroy the records every later one needs.
+func TestCallersCannotCorruptTheCache(t *testing.T) {
+	body := `{"data":[{"origin":"example.test","virtualNameServer":"a.ns14.net","resourceRecords":[` +
+		`{"name":"www","ttl":60,"type":"A","value":"1.1.1.1"},` +
+		`{"name":"mail","ttl":60,"type":"A","value":"2.2.2.2"},` +
+		`{"name":"api","ttl":60,"type":"A","value":"3.3.3.3"}]}]}`
+
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, body)
+	})
+
+	// Warm the cache, then take a second read so the slice under test comes
+	// from the cache-hit path, and filter it the way the resource does.
+	if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+		t.Fatalf("warm read: %s", err)
+	}
+
+	cached, err := c.GetRecords(context.Background(), testZoneID)
+	if err != nil {
+		t.Fatalf("first read: %s", err)
+	}
+
+	_ = slices.DeleteFunc(cached, func(r Record) bool { return r.Name != "www" })
+
+	// Every later resource must still see the untouched zone.
+	second, err := c.GetRecords(context.Background(), testZoneID)
+	if err != nil {
+		t.Fatalf("second read: %s", err)
+	}
+
+	if len(second) != 3 {
+		t.Fatalf("cache corrupted: expected 3 records, got %d: %+v", len(second), second)
+	}
+
+	for _, want := range []string{"www", "mail", "api"} {
+		if !slices.ContainsFunc(second, func(r Record) bool { return r.Name == want }) {
+			t.Errorf("cache corrupted: record %q missing", want)
+		}
 	}
 }
