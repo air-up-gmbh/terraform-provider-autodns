@@ -18,7 +18,14 @@ type APIResponse[T any] struct {
 type Client struct {
 	HTTPClient *http.Client
 
-	mu sync.Mutex
+	// writeMu serializes mutating calls. The AutoDNS _stream endpoint is a
+	// read-modify-write against the whole zone, so concurrent adds/rems can
+	// lose updates.
+	writeMu sync.Mutex
+
+	// cacheMu guards zoneCache only. It is never held across a network call.
+	cacheMu   sync.RWMutex
+	zoneCache map[string][]Record
 
 	HostURL  string
 	Context  string
@@ -34,14 +41,41 @@ func NewClient(host, context, username, password string) *Client {
 		Username:   username,
 		Password:   password,
 		Context:    context,
+		zoneCache:  map[string][]Record{},
 	}
 }
 
-func request[T any](c *Client, req *http.Request) ([]T, error) {
-	// Lock the mutex to avoid concurrent updates
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// cachedRecords returns the cached records for a zone, if present.
+func (c *Client) cachedRecords(zoneID string) ([]Record, bool) {
+	c.cacheMu.RLock()
+	defer c.cacheMu.RUnlock()
 
+	records, ok := c.zoneCache[zoneID]
+
+	return records, ok
+}
+
+// cacheRecords stores the records for a zone.
+func (c *Client) cacheRecords(zoneID string, records []Record) {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+
+	if c.zoneCache == nil {
+		c.zoneCache = map[string][]Record{}
+	}
+
+	c.zoneCache[zoneID] = records
+}
+
+// invalidateZone drops the cached records for a zone after a mutation.
+func (c *Client) invalidateZone(zoneID string) {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+
+	delete(c.zoneCache, zoneID)
+}
+
+func request[T any](c *Client, req *http.Request) ([]T, error) {
 	// Add authentication header
 	req.SetBasicAuth(c.Username, c.Password)
 

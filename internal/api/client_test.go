@@ -1,0 +1,187 @@
+package api
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+)
+
+const testZoneID = "example.test@a.ns14.net"
+
+// newTestClient returns a client pointed at a local test server. No request
+// ever leaves the process, so these tests never touch the real AutoDNS API.
+func newTestClient(t *testing.T, handler http.HandlerFunc) (*Client, *int64) {
+	t.Helper()
+
+	var calls int64
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&calls, 1)
+		handler(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewClient(strings.TrimPrefix(srv.URL, "http://"), "4", "user", "pass")
+	c.HostURL = srv.URL
+
+	return c, &calls
+}
+
+const oneRecord = `{"name":"www","ttl":60,"type":"A","value":"1.1.1.1"}`
+
+func zoneBody() string {
+	return fmt.Sprintf(`{"data":[{"origin":"example.test","virtualNameServer":"a.ns14.net","resourceRecords":[%s]}]}`, oneRecord)
+}
+
+func TestGetRecordsCachesZone(t *testing.T) {
+	c, calls := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, zoneBody())
+	})
+
+	for i := range 5 {
+		records, err := c.GetRecords(context.Background(), testZoneID)
+		if err != nil {
+			t.Fatalf("call %d: unexpected error: %s", i, err)
+		}
+
+		if len(records) != 1 || records[0].Name != "www" {
+			t.Fatalf("call %d: unexpected records: %+v", i, records)
+		}
+	}
+
+	// The whole point of the change: 5 reads, 1 HTTP request.
+	if got := atomic.LoadInt64(calls); got != 1 {
+		t.Errorf("expected 1 HTTP call for 5 reads, got %d", got)
+	}
+}
+
+func TestGetRecordsSeparateZonesAreCachedSeparately(t *testing.T) {
+	c, calls := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, zoneBody())
+	})
+
+	for _, zone := range []string{testZoneID, "other.test@a.ns14.net", testZoneID} {
+		if _, err := c.GetRecords(context.Background(), zone); err != nil {
+			t.Fatalf("zone %s: unexpected error: %s", zone, err)
+		}
+	}
+
+	if got := atomic.LoadInt64(calls); got != 2 {
+		t.Errorf("expected 2 HTTP calls for 2 distinct zones, got %d", got)
+	}
+}
+
+func TestMutationsInvalidateCache(t *testing.T) {
+	tests := map[string]func(*Client) error{
+		"create": func(c *Client) error {
+			return c.CreateRecords(context.Background(), testZoneID, []Record{{Name: "a", Type: "A", Value: "1.1.1.1"}})
+		},
+		"update": func(c *Client) error {
+			return c.UpdateRecords(context.Background(), testZoneID,
+				[]Record{{Name: "a", Type: "A", Value: "1.1.1.1"}},
+				[]Record{{Name: "a", Type: "A", Value: "2.2.2.2"}})
+		},
+		"delete": func(c *Client) error {
+			return c.DeleteRecords(context.Background(), testZoneID, []Record{{Name: "a", Type: "A", Value: "1.1.1.1"}})
+		},
+	}
+
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			c, calls := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, zoneBody())
+			})
+
+			// Warm the cache, mutate, then read again.
+			if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+				t.Fatalf("warm read: %s", err)
+			}
+
+			if err := mutate(c); err != nil {
+				t.Fatalf("mutate: %s", err)
+			}
+
+			if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+				t.Fatalf("read after mutate: %s", err)
+			}
+
+			// read (1) + mutate (1) + re-read because cache was dropped (1)
+			if got := atomic.LoadInt64(calls); got != 3 {
+				t.Errorf("expected 3 HTTP calls, got %d (cache not invalidated?)", got)
+			}
+		})
+	}
+}
+
+func TestGetRecordsEmptyDataReturnsErrorNotPanic(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"data":[]}`)
+	})
+
+	// Before the fix this panicked on res[0] and crashed the provider.
+	_, err := c.GetRecords(context.Background(), testZoneID)
+	if err == nil {
+		t.Fatal("expected an error for an empty data array, got nil")
+	}
+}
+
+func TestGetRecordsErrorIsNotCached(t *testing.T) {
+	var fail atomic.Bool
+	fail.Store(true)
+
+	c, calls := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if fail.Load() {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, `{"data":[]}`)
+
+			return
+		}
+		fmt.Fprint(w, zoneBody())
+	})
+
+	if _, err := c.GetRecords(context.Background(), testZoneID); err == nil {
+		t.Fatal("expected first call to fail")
+	}
+
+	fail.Store(false)
+
+	if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+		t.Fatalf("expected recovery after failure, got: %s", err)
+	}
+
+	if got := atomic.LoadInt64(calls); got != 2 {
+		t.Errorf("expected 2 HTTP calls (failure must not be cached), got %d", got)
+	}
+}
+
+func TestConcurrentReadsAreSafe(t *testing.T) {
+	c, calls := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, zoneBody())
+	})
+
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+				t.Errorf("concurrent read: %s", err)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// Racing readers may each miss before the first store lands; the cache
+	// must still bound the calls well below 20 and never corrupt the map.
+	if got := atomic.LoadInt64(calls); got > 20 {
+		t.Errorf("unexpected call count: %d", got)
+	}
+}

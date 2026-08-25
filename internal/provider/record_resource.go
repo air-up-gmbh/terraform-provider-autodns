@@ -194,8 +194,12 @@ func (r *RecordResource) Read(ctx context.Context, req resource.ReadRequest, res
 		return r.Name != state.Name.ValueString() || r.Type != state.Type.ValueString()
 	})
 
+	// The record is gone from the zone. Drop it from state so Terraform
+	// plans to recreate it instead of failing every subsequent plan.
 	if len(records) == 0 {
-		resp.Diagnostics.AddError("Unexpected response", fmt.Sprintf("Could not find a record with the id: %s", state.ID.ValueString()))
+		tflog.Debug(ctx, "record not found in zone, removing from state", map[string]any{"id": state.ID.ValueString()})
+		resp.State.RemoveResource(ctx)
+
 		return
 	}
 
