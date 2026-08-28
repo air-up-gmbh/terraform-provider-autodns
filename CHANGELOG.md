@@ -15,6 +15,8 @@ BUG FIXES:
 - Return an error instead of panicking when the API returns no zone.
 - Remove a record from state when it no longer exists in the zone, so the plan
   proposes recreating it rather than failing.
+- Invalidate the per-zone cache before a mutation as well as after, so a
+  snapshot cached earlier in the same run cannot be served stale after a write.
 
 ## 0.1.2 (PoC release)
 

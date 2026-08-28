@@ -236,3 +236,46 @@ func TestCallersCannotCorruptTheCache(t *testing.T) {
 		}
 	}
 }
+
+// A mutating call must drop the cache BEFORE it writes, not only after. The
+// post-write invalidate already covers the success path, so this isolates the
+// case a successful write hides: a write that FAILS must still have dropped any
+// snapshot cached earlier in the same run, so a later read cannot serve stale
+// data from before the attempted mutation.
+func TestMutationInvalidatesBeforeWrite(t *testing.T) {
+	var failWrite atomic.Bool
+
+	c, calls := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		// _stream is the mutating endpoint; fail it while failWrite is set.
+		if failWrite.Load() && strings.Contains(r.URL.Path, "_stream") {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, `{"data":[]}`)
+
+			return
+		}
+		fmt.Fprint(w, zoneBody())
+	})
+
+	// Warm the cache, as a create existence-check or refresh would.
+	if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+		t.Fatalf("warm read: %s", err)
+	}
+
+	// A mutation is attempted and fails at the network. Only a pre-write
+	// invalidate can have dropped the snapshot in this path.
+	failWrite.Store(true)
+	if err := c.CreateRecords(context.Background(), testZoneID, []Record{{Name: "x", Type: "A", Value: "1.1.1.1"}}); err == nil {
+		t.Fatal("expected the create to fail")
+	}
+	failWrite.Store(false)
+
+	// The next read must re-fetch, not serve the pre-write snapshot.
+	before := atomic.LoadInt64(calls)
+	if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+		t.Fatalf("read after failed mutate: %s", err)
+	}
+
+	if atomic.LoadInt64(calls) == before {
+		t.Error("read after a failed write was served from a pre-write snapshot; cache was not invalidated before the write")
+	}
+}

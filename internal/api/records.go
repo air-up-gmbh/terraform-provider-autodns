@@ -36,6 +36,11 @@ func (c *Client) CreateRecords(ctx context.Context, zoneID string, records []Rec
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
+	// Drop any cached copy before the write too: a create existence-check or
+	// refresh earlier in this run may have cached a snapshot that this write
+	// is about to make stale.
+	c.invalidateZone(zoneID)
+
 	zs, err := json.Marshal(&ZoneStream{
 		Adds: records,
 	})
@@ -114,6 +119,11 @@ func (c *Client) UpdateRecords(ctx context.Context, zoneID string, oldRecords, n
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
+	// Drop any cached copy before the write too: a create existence-check or
+	// refresh earlier in this run may have cached a snapshot that this write
+	// is about to make stale.
+	c.invalidateZone(zoneID)
+
 	zs, err := json.Marshal(&ZoneStream{
 		Adds: newRecords,
 		Rems: oldRecords,
@@ -148,6 +158,11 @@ func (c *Client) DeleteRecords(ctx context.Context, zoneID string, records []Rec
 	// Serialize mutations: _stream is a read-modify-write on the whole zone.
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+
+	// Drop any cached copy before the write too: a create existence-check or
+	// refresh earlier in this run may have cached a snapshot that this write
+	// is about to make stale.
+	c.invalidateZone(zoneID)
 
 	zs, err := json.Marshal(&ZoneStream{
 		Rems: records,
