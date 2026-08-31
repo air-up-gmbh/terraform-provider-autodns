@@ -79,6 +79,12 @@ func (c *Client) GetRecords(ctx context.Context, zoneID string) ([]Record, error
 		return slices.Clone(records), nil
 	}
 
+	// Hold the write lock for reading so a fetch never overlaps an in-flight
+	// _stream write. Without this a read can observe, and then cache, a zone
+	// midway through a mutation.
+	c.writeMu.RLock()
+	defer c.writeMu.RUnlock()
+
 	// Only one fetch per zone: parallel readers that all miss the cache queue
 	// here, and every one after the winner finds the zone already cached.
 	fetch := c.fetchLock(zoneID)

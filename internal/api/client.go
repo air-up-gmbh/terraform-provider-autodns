@@ -18,10 +18,12 @@ type APIResponse[T any] struct {
 type Client struct {
 	HTTPClient *http.Client
 
-	// writeMu serializes mutating calls. The AutoDNS _stream endpoint is a
+	// writeMu guards zone mutations. The AutoDNS _stream endpoint is a
 	// read-modify-write against the whole zone, so concurrent adds/rems can
-	// lose updates.
-	writeMu sync.Mutex
+	// lose updates. Reads hold it for reading, which keeps them from
+	// observing (and caching) a zone midway through a write, the way the
+	// single global lock used to.
+	writeMu sync.RWMutex
 
 	// cacheMu guards zoneCache and zoneFetch only. It is never held across a
 	// network call.

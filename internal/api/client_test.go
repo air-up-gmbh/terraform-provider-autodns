@@ -10,6 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const testZoneID = "example.test@a.ns14.net"
@@ -277,5 +278,68 @@ func TestMutationInvalidatesBeforeWrite(t *testing.T) {
 
 	if atomic.LoadInt64(calls) == before {
 		t.Error("read after a failed write was served from a pre-write snapshot; cache was not invalidated before the write")
+	}
+}
+
+// The released provider held one global lock across every request, so a read
+// could never overlap a write. Splitting the locks for caching must not lose
+// that: a fetch overlapping an in-flight _stream write can observe, and then
+// cache, a zone midway through a mutation.
+func TestFetchDoesNotOverlapInFlightWrite(t *testing.T) {
+	var (
+		writeInFlight atomic.Bool
+		overlapped    atomic.Bool
+		writeStarted  = make(chan struct{})
+	)
+
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "_stream") {
+			writeInFlight.Store(true)
+			close(writeStarted)
+			// Hold the write open long enough for a racing read to land.
+			time.Sleep(60 * time.Millisecond)
+			writeInFlight.Store(false)
+			fmt.Fprint(w, `{"data":[]}`)
+
+			return
+		}
+
+		// A GET must never be served while a write is in flight.
+		if writeInFlight.Load() {
+			overlapped.Store(true)
+		}
+		fmt.Fprint(w, zoneBody())
+	})
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		if err := c.CreateRecords(context.Background(), testZoneID,
+			[]Record{{Name: "a", Type: "A", Value: "1.1.1.1"}}); err != nil {
+			t.Errorf("create: %s", err)
+		}
+	}()
+
+	// Start the read once the write is actually in flight.
+	<-writeStarted
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		if _, err := c.GetRecords(context.Background(), testZoneID); err != nil {
+			t.Errorf("read: %s", err)
+		}
+	}()
+
+	wg.Wait()
+
+	if overlapped.Load() {
+		t.Error("a zone fetch was served while a _stream write was in flight")
 	}
 }

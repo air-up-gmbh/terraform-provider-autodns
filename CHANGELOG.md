@@ -17,6 +17,9 @@ BUG FIXES:
   proposes recreating it rather than failing.
 - Invalidate the per-zone cache before a mutation as well as after, so a
   snapshot cached earlier in the same run cannot be served stale after a write.
+- Hold the write lock for reading while fetching a zone, so a read can no
+  longer overlap an in-flight write. The previous single global lock gave this
+  for free; splitting it for caching had removed it.
 
 ## 0.1.2 (PoC release)
 
