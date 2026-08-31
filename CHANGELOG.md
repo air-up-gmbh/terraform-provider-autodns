@@ -1,3 +1,13 @@
+## 1.0.0 (PoC release)
+
+BREAKING CHANGES:
+- `values` on `autodns_record` is now a Set instead of a List. DNS treats the
+  values at a name and type as an unordered set, and AutoDNS returns them in a
+  different order than they were written, which made every reordering show up
+  as a permanent plan diff on records nobody had touched. Configuration is
+  unchanged (`values = [...]` still works), but the state representation
+  differs, so `terraform plan` should be reviewed carefully on first upgrade.
+
 ## 0.2.0 (PoC release)
 
 Zone records are now fetched once per zone instead of once per record resource.

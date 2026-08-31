@@ -117,8 +117,8 @@ func TestAccRecordResourceApexRecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(60)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("A")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(1)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(1)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("2.2.2.2"),
 					})),
 				},
@@ -146,8 +146,8 @@ func TestAccRecordResourceApexRecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(90)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("A")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(1)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(1)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("4.4.4.4"),
 					})),
 				},
@@ -178,8 +178,8 @@ func TestAccRecordResourceARecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("acctest_a")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(60)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("A")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(1)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(1)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("1.1.1.1"),
 					})),
 				},
@@ -207,8 +207,8 @@ func TestAccRecordResourceARecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("acctest_a")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(90)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("A")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(1)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(1)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("2.2.2.2"),
 					})),
 				},
@@ -240,8 +240,8 @@ func TestAccRecordResourceTXTRecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("acctest_txt")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(60)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("TXT")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(2)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(2)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("foo"),
 						knownvalue.StringExact("baz"),
 					})),
@@ -270,8 +270,8 @@ func TestAccRecordResourceTXTRecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("acctest_txt")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(60)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("TXT")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(3)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(3)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("foo"),
 						knownvalue.StringExact("bar"),
 						knownvalue.StringExact("baz"),
@@ -305,8 +305,8 @@ func TestAccRecordResourceMXRecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("acctest_mx")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(60)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("MX")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(2)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(2)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("10 foo"),
 						knownvalue.StringExact("30 baz"),
 					})),
@@ -335,8 +335,8 @@ func TestAccRecordResourceMXRecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("acctest_mx")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(60)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("MX")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(3)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(3)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("10 foo"),
 						knownvalue.StringExact("20 bar"),
 						knownvalue.StringExact("30 baz"),
@@ -369,8 +369,8 @@ func TestAccRecordResourceMXToARecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("acctest_mx")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(60)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("MX")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(2)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(2)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("10 foo"),
 						knownvalue.StringExact("30 baz"),
 					})),
@@ -384,8 +384,8 @@ func TestAccRecordResourceMXToARecord(t *testing.T) {
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("name"), knownvalue.StringExact("acctest_a")),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("ttl"), knownvalue.Int32Exact(90)),
 					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("type"), knownvalue.StringExact("A")),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListSizeExact(1)),
-					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.ListExact([]knownvalue.Check{
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetSizeExact(1)),
+					statecheck.ExpectKnownValue("autodns_record.test", tfjsonpath.New("values"), knownvalue.SetExact([]knownvalue.Check{
 						knownvalue.StringExact("2.2.2.2"),
 					})),
 				},

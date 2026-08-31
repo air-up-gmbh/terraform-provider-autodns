@@ -45,7 +45,7 @@ type RecordResourceModel struct {
 	Name   types.String `tfsdk:"name"`
 	TTL    types.Int64  `tfsdk:"ttl"`
 	Type   types.String `tfsdk:"type"`
-	Values types.List   `tfsdk:"values"`
+	Values types.Set    `tfsdk:"values"`
 }
 
 func (r *RecordResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -92,10 +92,12 @@ func (r *RecordResource) Schema(ctx context.Context, req resource.SchemaRequest,
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
-			"values": schema.ListAttribute{
-				ElementType:         types.StringType,
-				MarkdownDescription: "Record Value",
-				Required:            true,
+			"values": schema.SetAttribute{
+				ElementType: types.StringType,
+				MarkdownDescription: "Record values. DNS treats the values at a name and type as an " +
+					"unordered set, and AutoDNS may return them in a different order than they were " +
+					"written, so ordering here is not significant.",
+				Required: true,
 			},
 		},
 	}
@@ -436,7 +438,7 @@ func flattenRecord(ctx context.Context, records []api.Record) (RecordResourceMod
 		values = append(values, v)
 	}
 
-	tfValues, diags := types.ListValueFrom(ctx, types.StringType, values)
+	tfValues, diags := types.SetValueFrom(ctx, types.StringType, values)
 
 	state.Name = types.StringValue(records[0].Name)
 	state.Type = types.StringValue(records[0].Type)

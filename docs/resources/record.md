@@ -48,7 +48,7 @@ resource "autodns_record" "example_MX" {
 
 - `name` (String) Name of the DNS record.
 - `type` (String) Record Type
-- `values` (List of String) Record Value
+- `values` (Set of String) Record values. DNS treats the values at a name and type as an unordered set, and AutoDNS may return them in a different order than they were written, so ordering here is not significant.
 - `zone_id` (String) AutoDNS zone ID. Must be provided in the format zoneOrigin@zoneVirtualNameServer.
 
 ### Optional
