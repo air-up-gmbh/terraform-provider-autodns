@@ -1,4 +1,4 @@
-## 1.0.0 (PoC release)
+## 0.2.0 (PoC release)
 
 BREAKING CHANGES:
 - `values` on `autodns_record` is now a Set instead of a List. DNS treats the
@@ -7,8 +7,6 @@ BREAKING CHANGES:
   as a permanent plan diff on records nobody had touched. Configuration is
   unchanged (`values = [...]` still works), but the state representation
   differs, so `terraform plan` should be reviewed carefully on first upgrade.
-
-## 0.2.0 (PoC release)
 
 Zone records are now fetched once per zone instead of once per record resource.
 The AutoDNS API has no per-record read, so every `autodns_record` used to
