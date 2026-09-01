@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -31,6 +32,15 @@ func (c *Client) CreateRecords(ctx context.Context, zoneID string, records []Rec
 		return fmt.Errorf("the zone is must have the format origin@virtualNameServer")
 	}
 
+	// Serialize mutations: _stream is a read-modify-write on the whole zone.
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	// Drop any cached copy before the write too: a create existence-check or
+	// refresh earlier in this run may have cached a snapshot that this write
+	// is about to make stale.
+	c.invalidateZone(zoneID)
+
 	zs, err := json.Marshal(&ZoneStream{
 		Adds: records,
 	})
@@ -48,6 +58,9 @@ func (c *Client) CreateRecords(ctx context.Context, zoneID string, records []Rec
 		return err
 	}
 
+	// The zone changed, so any cached copy is now stale.
+	c.invalidateZone(zoneID)
+
 	return nil
 }
 
@@ -56,6 +69,30 @@ func (c *Client) GetRecords(ctx context.Context, zoneID string) ([]Record, error
 	zoneInfo := strings.Split(zoneID, "@")
 	if len(zoneInfo) != 2 {
 		return nil, fmt.Errorf("the zone is must have the format origin@virtualNameServer")
+	}
+
+	// Serve from the per-zone cache when we already fetched this zone. The
+	// API has no per-record read, so without this every record resource
+	// re-downloads the whole zone. Callers filter the result in place with
+	// slices.DeleteFunc, so hand out a copy and never the cached slice.
+	if records, ok := c.cachedRecords(zoneID); ok {
+		return slices.Clone(records), nil
+	}
+
+	// Hold the write lock for reading so a fetch never overlaps an in-flight
+	// _stream write. Without this a read can observe, and then cache, a zone
+	// midway through a mutation.
+	c.writeMu.RLock()
+	defer c.writeMu.RUnlock()
+
+	// Only one fetch per zone: parallel readers that all miss the cache queue
+	// here, and every one after the winner finds the zone already cached.
+	fetch := c.fetchLock(zoneID)
+	fetch.Lock()
+	defer fetch.Unlock()
+
+	if records, ok := c.cachedRecords(zoneID); ok {
+		return slices.Clone(records), nil
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/zone/%s/%s", c.HostURL, zoneInfo[0], zoneInfo[1]), nil)
@@ -68,7 +105,13 @@ func (c *Client) GetRecords(ctx context.Context, zoneID string) ([]Record, error
 		return nil, err
 	}
 
-	return res[0].Records, nil
+	if len(res) == 0 {
+		return nil, fmt.Errorf("no zone returned by the API for %s", zoneID)
+	}
+
+	c.cacheRecords(zoneID, res[0].Records)
+
+	return slices.Clone(res[0].Records), nil
 }
 
 // UpdateRecords sends an API request to update the records in the JSON payload.
@@ -77,6 +120,15 @@ func (c *Client) UpdateRecords(ctx context.Context, zoneID string, oldRecords, n
 	if len(zoneInfo) != 2 {
 		return fmt.Errorf("the zone is must have the format origin@virtualNameServer")
 	}
+
+	// Serialize mutations: _stream is a read-modify-write on the whole zone.
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	// Drop any cached copy before the write too: a create existence-check or
+	// refresh earlier in this run may have cached a snapshot that this write
+	// is about to make stale.
+	c.invalidateZone(zoneID)
 
 	zs, err := json.Marshal(&ZoneStream{
 		Adds: newRecords,
@@ -96,6 +148,9 @@ func (c *Client) UpdateRecords(ctx context.Context, zoneID string, oldRecords, n
 		return err
 	}
 
+	// The zone changed, so any cached copy is now stale.
+	c.invalidateZone(zoneID)
+
 	return nil
 }
 
@@ -105,6 +160,15 @@ func (c *Client) DeleteRecords(ctx context.Context, zoneID string, records []Rec
 	if len(zoneInfo) != 2 {
 		return fmt.Errorf("the zone is must have the format origin@virtualNameServer")
 	}
+
+	// Serialize mutations: _stream is a read-modify-write on the whole zone.
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	// Drop any cached copy before the write too: a create existence-check or
+	// refresh earlier in this run may have cached a snapshot that this write
+	// is about to make stale.
+	c.invalidateZone(zoneID)
 
 	zs, err := json.Marshal(&ZoneStream{
 		Rems: records,
@@ -122,6 +186,9 @@ func (c *Client) DeleteRecords(ctx context.Context, zoneID string, records []Rec
 	if err != nil {
 		return err
 	}
+
+	// The zone changed, so any cached copy is now stale.
+	c.invalidateZone(zoneID)
 
 	return nil
 }

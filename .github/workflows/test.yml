@@ -10,6 +10,8 @@ on:
   push:
     paths-ignore:
       - 'README.md'
+  # Manual trigger, needed to run the acceptance tests (see the test job).
+  workflow_dispatch:
 
 # Testing only needs permissions to read the repository contents.
 permissions:
@@ -51,10 +53,17 @@ jobs:
           git diff --compact-summary --exit-code || \
             (echo; echo "Unexpected difference in directories after code generation. Run 'make generate' command and commit."; exit 1)
 
-  # Run acceptance tests in a matrix with Terraform CLI versions
+  # Run acceptance tests in a matrix with Terraform CLI versions.
+  #
+  # These create and delete real DNS records in the zone named by
+  # TF_AUTODNS_ZONE_ID, including an A record at the zone apex. The README says
+  # not to run them against a production zone, so they are opt-in rather than
+  # running on every push: trigger this workflow manually once you have
+  # confirmed which zone that secret points at.
   test:
     name: Terraform Provider Acceptance Tests
     needs: build
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
